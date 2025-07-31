@@ -1,5 +1,4 @@
 # Midori Cycling Team Website
-ｔets9731
 
 This is the official website for Midori Cycling Team.
 
