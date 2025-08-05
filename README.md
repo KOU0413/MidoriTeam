@@ -8,7 +8,7 @@ This is the official website for Midori Cycling Team.
 - Team member profiles
 - Achievement timeline
 - Sponsor section
-- Contact form
+- Contact formasidjilja
 
 ## Installation
 1. Clone the repository
