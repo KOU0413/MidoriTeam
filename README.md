@@ -9,6 +9,7 @@ This is the official website for Midori Cycling Team.
 - Achievement timeline
 - Sponsor section
 - Contact form
+- TBD
 
 ## Installation
 1. Clone the repository
@@ -21,3 +22,4 @@ This is the official website for Midori Cycling Team.
 
 ## License
 MIT
+
