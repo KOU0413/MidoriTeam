@@ -32,8 +32,10 @@ jobs:
           remote_host: ${{ secrets.EC2_HOST }}
           remote_user: ${{ secrets.EC2_USER }}
           remote_key: ${{ secrets.EC2_SSH_KEY }}
-          # 跳过 host key 校验，避免因上一部失败而阻断
-          ssh_options: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
+          remote_port: 22
+          # 用 rsh 传递 ssh 选项（忽略 known_hosts，先把流程跑通）
+          rsh: "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15"
+
 
       - name: Publish & reload nginx
         uses: appleboy/ssh-action@v1.0.3
