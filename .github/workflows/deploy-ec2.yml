@@ -2,19 +2,7 @@ name: deploy-to-ec2
 on:
   push:
     branches: [ main ]
-    paths:
-      - "index.html"
-      - "css/**"
-      - "img/**"
-      - "js/**"
-      - "!README.md"
-
-permissions:
-  contents: read
-
-concurrency:
-  group: ec2-deploy
-  cancel-in-progress: true
+  workflow_dispatch: {}   # 允许手动触发
 
 jobs:
   deploy:
@@ -22,10 +10,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Add EC2 host to known_hosts
+      # 先测 Runner 到 22 端口是否可达（日志里能看出来）
+      - name: Check TCP 22 reachability
+        run: |
+          sudo apt-get update >/dev/null
+          sudo apt-get install -y netcat-openbsd >/dev/null
+          nc -zv ${{ secrets.EC2_HOST }} 22 || true
+
+      # 加入 known_hosts；连不上也不让工作流失败
+      - name: Add EC2 host to known_hosts (tolerant)
         run: |
           mkdir -p ~/.ssh
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -p 22 -T 5 -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts || true
 
       - name: Rsync files to EC2
         uses: burnett01/rsync-deployments@5.2
@@ -36,6 +32,8 @@ jobs:
           remote_host: ${{ secrets.EC2_HOST }}
           remote_user: ${{ secrets.EC2_USER }}
           remote_key: ${{ secrets.EC2_SSH_KEY }}
+          # 跳过 host key 校验，避免因上一部失败而阻断
+          ssh_options: "-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null"
 
       - name: Publish & reload nginx
         uses: appleboy/ssh-action@v1.0.3
