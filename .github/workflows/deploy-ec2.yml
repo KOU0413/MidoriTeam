@@ -2,7 +2,7 @@ name: deploy-to-ec2
 on:
   push:
     branches: [ main ]
-  workflow_dispatch: {}   # 允许手动触发
+  workflow_dispatch: {}
 
 jobs:
   deploy:
@@ -10,19 +10,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # 先测 Runner 到 22 端口是否可达（日志里能看出来）
+      - name: Assert secrets exist
+        run: |
+          [ -n "${{ secrets.EC2_HOST }}" ] || { echo "EC2_HOST is EMPTY"; exit 1; }
+          [ -n "${{ secrets.EC2_USER }}" ] || { echo "EC2_USER is EMPTY"; exit 1; }
+          [ -n "${{ secrets.EC2_SSH_KEY }}" ] || { echo "EC2_SSH_KEY is EMPTY"; exit 1; }
+
       - name: Check TCP 22 reachability
         run: |
           sudo apt-get update >/dev/null
           sudo apt-get install -y netcat-openbsd >/dev/null
           nc -zv ${{ secrets.EC2_HOST }} 22 || true
 
-      # 加入 known_hosts；连不上也不让工作流失败
-      - name: Add EC2 host to known_hosts (tolerant)
+      - name: Add EC2 to known_hosts (tolerant)
         run: |
           mkdir -p ~/.ssh
           ssh-keyscan -p 22 -T 5 -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts || true
 
+      # —— 方案 A：rsync（推荐）
       - name: Rsync files to EC2
         uses: burnett01/rsync-deployments@5.2
         with:
@@ -33,9 +38,21 @@ jobs:
           remote_user: ${{ secrets.EC2_USER }}
           remote_key: ${{ secrets.EC2_SSH_KEY }}
           remote_port: 22
-          # 用 rsh 传递 ssh 选项（忽略 known_hosts，先把流程跑通）
           rsh: "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15"
 
+      # —— 方案 B：SCP（如果上面 rsync 仍不顺就启用这一段，注释掉 rsync 步骤）
+      # - name: Upload via SCP
+      #   uses: appleboy/scp-action@v0.1.7
+      #   with:
+      #     host: ${{ secrets.EC2_HOST }}
+      #     username: ${{ secrets.EC2_USER }}
+      #     key: ${{ secrets.EC2_SSH_KEY }}
+      #     source: "."
+      #     target: "/home/ec2-user/site"
+      #     rm: true
+      #     overwrite: true
+      #     strip_components: 0
+      #     exclude: ".git,README.md"
 
       - name: Publish & reload nginx
         uses: appleboy/ssh-action@v1.0.3
