@@ -27,32 +27,27 @@ jobs:
           mkdir -p ~/.ssh
           ssh-keyscan -p 22 -T 5 -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts || true
 
-      # —— 方案 A：rsync（推荐）
-      - name: Rsync files to EC2
-        uses: burnett01/rsync-deployments@5.2
-        with:
-          switches: -avzr --delete --exclude '.git' --exclude 'README.md'
-          path: .
-          remote_path: /home/ec2-user/site/
-          remote_host: ${{ secrets.EC2_HOST }}
-          remote_user: ${{ secrets.EC2_USER }}
-          remote_key: ${{ secrets.EC2_SSH_KEY }}
-          remote_port: 22
-          rsh: "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=15"
+      - name: Upload via rsync (native)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y rsync openssh-client
+      
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+      
+          # 可选：写入 known_hosts（不想写可用 -o StrictHostKeyChecking=no）
+          ssh-keyscan -p 22 -T 5 -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts || true
+      
+          # 先探一次 SSH，确保能通
+          ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -o ConnectTimeout=10 \
+            ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} "echo 'ssh ok'"
+      
+          # 真正同步（排除 .git/README.md）
+          rsync -avzr --delete --exclude '.git' --exclude 'README.md' \
+            -e "ssh -i ~/.ssh/id_rsa -o StrictHostKeyChecking=no -p 22" \
+            ./ ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/site/
 
-      # —— 方案 B：SCP（如果上面 rsync 仍不顺就启用这一段，注释掉 rsync 步骤）
-      # - name: Upload via SCP
-      #   uses: appleboy/scp-action@v0.1.7
-      #   with:
-      #     host: ${{ secrets.EC2_HOST }}
-      #     username: ${{ secrets.EC2_USER }}
-      #     key: ${{ secrets.EC2_SSH_KEY }}
-      #     source: "."
-      #     target: "/home/ec2-user/site"
-      #     rm: true
-      #     overwrite: true
-      #     strip_components: 0
-      #     exclude: ".git,README.md"
 
       - name: Publish & reload nginx
         uses: appleboy/ssh-action@v1.0.3
